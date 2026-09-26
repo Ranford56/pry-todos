@@ -3,7 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d0e10">
+<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f1f1ec" media="(prefers-color-scheme: light)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRYs">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>PRYs · To-dos</title>
 <style>
 :root { --bg:#0d0e10; --panel:#16171a; --card:#1c1d21; --line:#2a2c31; --fg:#f3f4f6; --dim:#8b9098;
@@ -179,7 +186,7 @@ const listOf = t => t.status === 'done' ? 'done' : (t.status === 'doing' && t.li
 //         the GitHub API with a fine-grained token kept in this browser. Edits are queued as actions/*.json and
 //         applied to the MEMORY.md files by `todos.py publish` on the PC (timer, every 5 min).
 const DATA_REPO = 'Ranford56/pry-todos-data';
-let mode = '', fetched = 0;
+let mode = '', fetched = 0, offline = false;
 const b64 = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 const today = () => new Date().toLocaleDateString('sv');
 
@@ -245,9 +252,19 @@ async function send(a) {
 
 const gh = {
   async refresh() {
-    const snap = await ghCall('todos.json', { raw: true });
-    if (!snap) throw new Error('todos.json aún no existe: corre `todos.py publish` en tu PC');
-    const files = await ghCall('actions');
+    let snap, files;
+    try {
+      snap = await ghCall('todos.json', { raw: true });
+      if (!snap) throw new Error('todos.json aún no existe: corre `todos.py publish` en tu PC');
+      files = await ghCall('actions');
+      store('snap', JSON.stringify(snap));
+      offline = false;
+    } catch (e) {  // no network (TypeError) -> show the last snapshot; anything else is a real error
+      if (!(e instanceof TypeError) || !store('snap')) throw e;
+      base = JSON.parse(store('snap'));
+      offline = true;
+      return view();
+    }
     const live = new Set((files || []).map(f => f.name));
     pending = pending.filter(p => live.has(p.name));  // gone from the repo = applied on the PC
     savePending();
@@ -287,7 +304,7 @@ function render() {
   $('#title').textContent = proj || 'Todas las tareas';
   const when = (ms, o) => new Date(ms).toLocaleString('es', o);
   $('#status').textContent = mode === 'gh'
-    ? `Último cambio ${when(S.synced * 1000, { dateStyle: 'medium', timeStyle: 'short' })} · consultado ${when(fetched, { timeStyle: 'short' })}` + (pending.length ? ` · ⏳ ${pending.length} por aplicar` : '')
+    ? `Último cambio ${when(S.synced * 1000, { dateStyle: 'medium', timeStyle: 'short' })} · consultado ${when(fetched, { timeStyle: 'short' })}` + (pending.length ? ` · ⏳ ${pending.length} por aplicar` : '') + (offline ? ' · ⚠ sin conexión, datos guardados' : '')
     : S.synced ? 'Última actualización ' + when(S.synced * 1000, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
   // desktop sidebar + mobile bottom nav
@@ -368,6 +385,7 @@ $('#add').onsubmit = async e => {
   }
 };
 run(b => b.refresh());
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
