@@ -1,0 +1,9 @@
+[Unit]
+Description=Sync PRYs to-dos every 5 minutes (edits from the Pages site wait for this)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

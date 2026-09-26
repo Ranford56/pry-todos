@@ -1,0 +1,6 @@
+[Unit]
+Description=Sync PRYs to-dos (MEMORY.md -> database, and the GitHub Pages data repo when configured)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/PRYs/PRY-TODOS/todos.py auto

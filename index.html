@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0e10">
+<title>PRYs · To-dos</title>
+<style>
+:root { --bg:#0d0e10; --panel:#16171a; --card:#1c1d21; --line:#2a2c31; --fg:#f3f4f6; --dim:#8b9098;
+  --acc:#d6f56b; --acc-fg:#141807; --inbox:#ff8a80; --next:#d6f56b; --waiting:#f5d76b; --someday:#8fb6ff; color-scheme:dark; }
+@media (prefers-color-scheme: light) {
+  :root { --bg:#f1f1ec; --panel:#fff; --card:#fff; --line:#e3e3dc; --fg:#15161a; --dim:#6a6e76;
+    --acc:#c9ee55; --inbox:#d1453b; --next:#5b7d00; --waiting:#9a7300; --someday:#2f5fd0; color-scheme:light; }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui, sans-serif; }
+button, select, input { font:inherit; color:var(--fg); }
+button { cursor:pointer; }
+button:active { opacity:.65; }
+select, input { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 12px; min-height:44px; }
+:focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
+
+#app { display:grid; min-height:100dvh; }
+#side { display:none; }
+main { min-width:0; width:100%; max-width:720px; margin:0 auto; padding:calc(20px + env(safe-area-inset-top)) 16px calc(120px + env(safe-area-inset-bottom)); }
+
+/* header */
+.top { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; margin-bottom:20px; }
+.crumb, .sub { color:var(--dim); font-size:13px; }
+h1 { margin:2px 0 4px; font-size:clamp(28px, 6vw, 42px); line-height:1.1; letter-spacing:-.02em; overflow-wrap:anywhere; }
+.actions { display:flex; gap:8px; align-items:center; }
+.icon { width:44px; height:44px; display:grid; place-items:center; background:var(--card); border:1px solid var(--line); border-radius:50%; }
+.icon.on { background:var(--acc); color:var(--acc-fg); border-color:var(--acc); }
+.busy #refresh svg { animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.primary { background:var(--acc); color:var(--acc-fg); border:0; border-radius:999px; padding:0 20px; min-height:44px; font-weight:600; }
+.newbtn { display:none; }
+
+/* progress card */
+.board { display:grid; gap:20px; }
+.stats { background:var(--card); border:1px solid var(--line); border-radius:24px; padding:20px; }
+.st-head { display:flex; justify-content:space-between; align-items:center; font-weight:600; }
+.pct { font-size:40px; font-weight:700; letter-spacing:-.03em; line-height:1.1; margin-top:8px; }
+.bars { display:flex; gap:8px; height:72px; margin-top:12px; }
+.bar { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; color:var(--dim); }
+.bar .v { min-height:18px; }
+.bar.today .v { background:var(--acc); color:var(--acc-fg); border-radius:999px; padding:0 8px; font-weight:700; }
+.col { flex:1; width:100%; display:flex; align-items:flex-end; min-height:0; }
+.col i { width:100%; border-radius:12px; background:var(--line); }
+.bar.today i { background:var(--acc); }
+
+/* project pills (phone) */
+#pills { display:flex; gap:8px; overflow-x:auto; margin:0 -16px 16px; padding:0 16px; scrollbar-width:none; }
+#pills::-webkit-scrollbar { display:none; }
+.pill { flex:none; display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 14px 0 10px; border-radius:999px;
+  background:var(--card); border:1px solid var(--line); color:var(--dim); white-space:nowrap; }
+.pill:first-child { padding-left:14px; }
+.pill.on { background:var(--acc); border-color:var(--acc); color:var(--acc-fg); font-weight:600; }
+.pill .n { font-size:12px; opacity:.75; }
+
+/* tasks */
+h2 { font-size:15px; margin:0 0 12px; color:var(--dim); font-weight:600; }
+.task { display:flex; gap:14px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:20px; padding:14px 16px; margin-bottom:10px; }
+.task .body { flex:1; min-width:0; overflow-wrap:anywhere; }
+.task .txt { font-weight:500; }
+.task.done .txt { text-decoration:line-through; color:var(--dim); }
+.task input[type=checkbox] { appearance:none; width:26px; height:26px; min-height:0; padding:0; border-radius:50%; flex:none; margin:0; cursor:pointer;
+  border:2px solid var(--dim); background:none; display:grid; place-items:center; }
+.task input[type=checkbox]:checked { background:var(--acc); border-color:var(--acc); }
+.task input[type=checkbox]:checked::after { content:"✓"; color:var(--acc-fg); font-weight:800; font-size:15px; line-height:1; }
+.meta { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; font-size:12.5px; color:var(--dim); }
+.pj { display:inline-flex; align-items:center; gap:6px; }
+.av { width:20px; height:20px; border-radius:50%; display:inline-grid; place-items:center; font-size:9px; font-weight:800; color:#15161a; flex:none; }
+.chip { display:inline-flex; align-items:center; padding:2px 10px; border-radius:999px; font-weight:600; font-size:12px;
+  background:color-mix(in srgb, var(--c) 16%, transparent); color:var(--c); }
+.mv { min-height:36px; padding:2px 8px; font-size:13px; border-radius:999px; }
+.empty { text-align:center; color:var(--dim); padding:40px 0; }
+
+/* mobile bottom nav with floating + */
+#tabs { position:fixed; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); display:flex; align-items:center;
+  background:var(--panel); border:1px solid var(--line); border-radius:26px; padding:6px; box-shadow:0 10px 30px #0006; }
+#tabs .t { flex:1; background:none; border:0; border-radius:18px; min-height:52px; color:var(--dim); font-size:11.5px; padding:0; }
+#tabs .t b { display:block; font-size:16px; }
+#tabs .t.on { color:var(--fg); font-weight:700; }
+#tabs .fab { flex:none; width:58px; height:58px; border-radius:50%; border:0; background:var(--acc); color:var(--acc-fg);
+  display:grid; place-items:center; transform:translateY(-16px); box-shadow:0 6px 20px color-mix(in srgb, var(--acc) 40%, transparent); }
+
+/* sidebar items */
+.item { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:0; border-radius:14px; padding:10px 12px; color:var(--dim); }
+.item:hover { background:var(--card); color:var(--fg); }
+.item.on { background:var(--acc); color:var(--acc-fg); font-weight:600; }
+.item span:not(.av):not(.n) { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.item .n { font-size:12px; opacity:.8; }
+.brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:18px; padding:0 12px 16px; }
+.brand i { width:32px; height:32px; border-radius:10px; background:var(--acc); color:var(--acc-fg); display:grid; place-items:center; font-style:normal; }
+#side h3 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); margin:20px 12px 8px; }
+#projs .item.on { background:var(--card); color:var(--fg); outline:1px solid var(--line); }
+#projs { overflow-y:auto; flex:1; min-height:0; }
+
+/* capture dialog */
+dialog { border:1px solid var(--line); border-radius:24px; background:var(--panel); color:var(--fg); padding:20px; width:min(460px, calc(100% - 24px)); }
+dialog::backdrop { background:#000a; }
+dialog form { display:flex; flex-direction:column; gap:12px; }
+dialog h2 { color:var(--fg); font-size:20px; margin:0; }
+dialog .row { display:flex; gap:8px; justify-content:flex-end; }
+dialog .row button:not(.primary) { background:none; border:0; color:var(--dim); padding:0 16px; }
+@media (max-width:600px) { dialog { margin:auto auto 12px; } }
+
+@media (min-width:900px) {
+  #app { grid-template-columns:260px 1fr; }
+  #side { display:flex; flex-direction:column; position:sticky; top:0; height:100dvh; padding:24px 14px; background:var(--panel); border-right:1px solid var(--line); }
+  main { max-width:none; padding:36px 40px 40px; }
+  #tabs, #donebtn, #pills { display:none; }
+  .newbtn { display:inline-block; }
+  .bars { height:150px; margin-top:16px; }
+  .pct { font-size:48px; }
+}
+@media (min-width:1150px) {
+  .board { grid-template-columns:minmax(0, 1fr) 340px; align-items:start; }
+  #stats { grid-column:2; grid-row:1; position:sticky; top:36px; }
+  #tasks { grid-column:1; grid-row:1; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand"><i>P</i> PRYs</div>
+    <div id="lists"></div>
+    <h3>Proyectos</h3>
+    <div id="projs"></div>
+  </aside>
+  <main>
+    <header class="top">
+      <div>
+        <div class="crumb" id="crumb"></div>
+        <h1 id="title">Todas las tareas</h1>
+        <div class="sub" id="status"></div>
+      </div>
+      <div class="actions">
+        <button id="donebtn" class="icon" aria-label="Done"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+        <button id="refresh" class="icon" aria-label="Refrescar">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></svg>
+        </button>
+        <button id="new" class="primary newbtn">+ Nueva tarea</button>
+      </div>
+    </header>
+    <div id="pills"></div>
+    <div class="board">
+      <section class="stats" id="stats"></section>
+      <section id="tasks"></section>
+    </div>
+  </main>
+</div>
+<nav id="tabs"></nav>
+<dialog id="dlg">
+  <form id="add">
+    <h2>Nueva tarea</h2>
+    <input id="text" placeholder="¿Qué hay que hacer?" autocomplete="off" required>
+    <select id="addproj" aria-label="Proyecto de la tarea"></select>
+    <div class="row"><button type="button" id="cancel">Cancelar</button><button class="primary">Agregar al Inbox</button></div>
+  </form>
+</dialog>
+<script>
+const TABS = { inbox:'Inbox', next:'Next', waiting:'Waiting', someday:'Someday', done:'Done' };
+const LISTS = ['inbox', 'next', 'waiting', 'someday'];
+const PLUS = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+let S = { tasks: [], projects: [], synced: 0 }, tab = 'inbox', proj = '';
+const $ = s => document.querySelector(s);
+const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
+const h = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+
+// GTD list a task lives in; a task Claude is running right now is by definition a next action
+const listOf = t => t.status === 'done' ? 'done' : (t.status === 'doing' && t.list === 'inbox' ? 'next' : t.list);
+
+// Two data sources, same UI.
+//  local: served by `todos.py serve`; edits go straight into the MEMORY.md files.
+//  gh:    served from GitHub Pages (no server). State lives in a PRIVATE data repo, read and written through
+//         the GitHub API with a fine-grained token kept in this browser. Edits are queued as actions/*.json and
+//         applied to the MEMORY.md files by `todos.py publish` on the PC (timer, every 5 min).
+const DATA_REPO = 'Ranford56/pry-todos-data';
+let mode = '', fetched = 0;
+const b64 = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+const today = () => new Date().toLocaleDateString('sv');
+
+const local = {
+  async call(path, body) {
+    const r = await fetch(path, { method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-Token': store('token') || '' },
+      body: body && JSON.stringify(body) });
+    if (r.status === 401) {
+      const t = prompt('Token');
+      if (t === null) throw new Error('Unauthorized');
+      store('token', t);
+      return local.call(path, body);
+    }
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message);
+    return j.data;
+  },
+  refresh: () => local.call('api/refresh', {}),
+  edit: (id, patch) => local.call('api/tasks/' + id, patch),
+  add: (project, text) => local.call('api/tasks', { project, text }),
+};
+
+let base = { projects: [], tasks: [], updated: 0 }, pending = [], chain = Promise.resolve();
+try { pending = JSON.parse(store('pending') || '[]'); } catch {}
+const savePending = () => store('pending', JSON.stringify(pending));
+
+async function ghCall(path, { raw, ...opts } = {}) {
+  const token = store('ghtoken') || prompt(`Token de GitHub (fine-grained, solo ${DATA_REPO}, Contents: read & write)`);
+  if (!token) throw new Error('Token requerido');
+  const r = await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/${path}`, { cache: 'no-store', ...opts,
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json',
+      Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json' } });
+  if (r.status === 401 || r.status === 403) { store('ghtoken', ''); throw new Error('Token inválido o sin permisos'); }
+  if (r.status !== 404 && !r.ok) throw new Error('GitHub ' + r.status);
+  store('ghtoken', token);
+  return r.status === 404 ? null : r.json();
+}
+
+// snapshot + not-yet-applied edits, so a change shows up immediately instead of after the next PC sync
+function view() {
+  const tasks = base.tasks.map(t => ({ ...t }));
+  for (const { name, a } of pending) {
+    if (a.op === 'add') tasks.push({ id: 'p-' + name, project: a.project, status: 'pending', list: 'inbox', text: a.text, done: null });
+    else {
+      const t = tasks.find(x => x.id === a.id);
+      if (!t) continue;
+      if (a.status) { t.status = a.status; t.done = a.status === 'done' ? t.done || today() : null; }
+      if (a.list) t.list = a.list;
+    }
+  }
+  return { projects: base.projects, tasks, synced: base.updated };
+}
+
+async function send(a) {
+  const name = `${String(Date.now()).padStart(15, '0')}-${Math.random().toString(36).slice(2, 6)}.json`;
+  const put = () => ghCall('actions/' + name, { method: 'PUT', body: JSON.stringify({ message: 'action', content: b64(JSON.stringify(a)) }) });
+  await (chain = chain.then(put, put));  // one commit at a time; parallel commits to one branch conflict
+  pending.push({ name, a });
+  savePending();
+  return view();
+}
+
+const gh = {
+  async refresh() {
+    const snap = await ghCall('todos.json', { raw: true });
+    if (!snap) throw new Error('todos.json aún no existe: corre `todos.py publish` en tu PC');
+    const files = await ghCall('actions');
+    const live = new Set((files || []).map(f => f.name));
+    pending = pending.filter(p => live.has(p.name));  // gone from the repo = applied on the PC
+    savePending();
+    base = snap;
+    return view();
+  },
+  edit: (id, patch) => send({ op: 'edit', id, ...patch }),
+  add: (project, text) => send({ op: 'add', project, text }),
+};
+
+const detect = () => fetch('api/tasks').then(r => r.status === 404 ? 'gh' : 'local', () => 'gh');
+async function run(fn) {
+  document.body.classList.add('busy');
+  try {
+    mode = mode || await detect();
+    S = await fn(mode === 'gh' ? gh : local);
+    fetched = Date.now();
+    render();
+    return true;
+  } catch (e) { $('#status').textContent = '⚠ ' + e.message; return false; }
+  finally { document.body.classList.remove('busy'); }
+}
+
+const avatar = n => h('span', { className: 'av', textContent: n.replace(/^(PRY|RPC)-/, '').slice(0, 2).toUpperCase(),
+  style: `background:hsl(${[...n].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 360} 70% 72%)` });
+const item = (label, n, on, fn, lead = '') =>
+  h('button', { className: 'item' + (on ? ' on' : ''), onclick: fn }, lead, h('span', { textContent: label }), h('span', { className: 'n', textContent: n }));
+
+function render() {
+  if (proj && !S.projects.includes(proj)) proj = '';
+  const all = S.tasks, tasks = proj ? all.filter(t => t.project === proj) : all;
+  const count = k => tasks.filter(t => listOf(t) === k).length;
+  const open = list => list.filter(t => t.status !== 'done').length;
+  const go = (t, p) => () => { tab = t; proj = p; render(); };
+
+  $('#crumb').textContent = proj ? 'PRYs › Proyectos' : 'PRYs';
+  $('#title').textContent = proj || 'Todas las tareas';
+  const when = (ms, o) => new Date(ms).toLocaleString('es', o);
+  $('#status').textContent = mode === 'gh'
+    ? `Último cambio ${when(S.synced * 1000, { dateStyle: 'medium', timeStyle: 'short' })} · consultado ${when(fetched, { timeStyle: 'short' })}` + (pending.length ? ` · ⏳ ${pending.length} por aplicar` : '')
+    : S.synced ? 'Última actualización ' + when(S.synced * 1000, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+  // desktop sidebar + mobile bottom nav
+  $('#lists').replaceChildren(...Object.entries(TABS).map(([k, l]) => item(l, k === 'done' ? '' : count(k), k === tab, go(k, proj))));
+  const shownProjects = S.projects.filter(n => n === proj || all.some(t => t.project === n));
+  const projBtns = cls => [['', 'Todos', open(all)], ...shownProjects.map(n => [n, n, open(all.filter(t => t.project === n))])]
+    .map(([p, label, n]) => h('button', { className: cls + (p === proj ? ' on' : ''), onclick: go(tab, p) },
+      p ? avatar(p) : '', h('span', { textContent: label.split('/').pop(), title: label }), h('span', { className: 'n', textContent: n })));
+  $('#projs').replaceChildren(...projBtns('item'));
+  $('#pills').replaceChildren(...projBtns('pill'));
+  const tabBtns = Object.entries(TABS).filter(([k]) => k !== 'done').map(([k, l]) =>
+    h('button', { className: 't' + (k === tab ? ' on' : ''), onclick: go(k, proj) }, h('b', { textContent: count(k) }), l));
+  tabBtns.splice(2, 0, h('button', { className: 'fab', ariaLabel: 'Nueva tarea', innerHTML: PLUS, onclick: openDlg }));
+  $('#tabs').replaceChildren(...tabBtns);
+
+  $('#donebtn').classList.toggle('on', tab === 'done');
+
+  // progress card
+  const done = tasks.length - open(tasks), running = tasks.filter(t => t.status === 'doing').length;
+  const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d; });
+  const by = {};
+  tasks.forEach(t => { if (t.done) by[t.done] = (by[t.done] || 0) + 1; });
+  const vals = days.map(d => by[d.toLocaleDateString('sv')] || 0), max = Math.max(1, ...vals);
+  $('#stats').replaceChildren(
+    h('div', { className: 'st-head' }, h('span', { textContent: 'Progreso' }),
+      h('span', { className: 'chip', style: '--c:var(--waiting)', textContent: running + ' en curso' })),
+    h('div', { className: 'pct', textContent: (tasks.length ? Math.round(100 * done / tasks.length) : 0) + '%' }),
+    h('div', { className: 'sub', textContent: `${done} de ${tasks.length} tareas hechas · últimos 7 días` }),
+    h('div', { className: 'bars' }, ...days.map((d, i) => h('div', { className: 'bar' + (i === 6 ? ' today' : '') },
+      h('span', { className: 'v', textContent: vals[i] || '' }),
+      h('div', { className: 'col' }, h('i', { style: `height:${Math.max(5, vals[i] / max * 100)}%` })),
+      h('span', { textContent: d.toLocaleDateString('es', { weekday: 'narrow' }) })))));
+
+  // task list
+  const shown = tasks.filter(t => listOf(t) === tab);
+  if (tab === 'done') shown.sort((a, b) => (b.done || '').localeCompare(a.done || ''));
+  $('#tasks').replaceChildren(h('h2', { textContent: `${TABS[tab]} · ${shown.length}` }),
+    ...(shown.length ? shown.map(card) : [h('div', { className: 'empty', textContent: 'Nada aquí.' })]));
+}
+
+function card(t) {
+  const done = t.status === 'done', ls = listOf(t), queued = t.id.startsWith('p-');  // added from the site, not on the PC yet
+  return h('div', { className: 'task' + (done ? ' done' : '') },
+    h('input', { type: 'checkbox', checked: done, disabled: queued, ariaLabel: 'Completar',
+      onchange: e => run(b => b.edit(t.id, { status: e.target.checked ? 'done' : 'pending' })) }),
+    h('div', { className: 'body' },
+      h('div', { className: 'txt', textContent: t.text }),
+      h('div', { className: 'meta' },
+        h('span', { className: 'pj' }, avatar(t.project), t.project),
+        done ? h('span', { textContent: '✓ ' + (t.done || '') }) : h('span', { className: 'chip', style: `--c:var(--${ls})`, textContent: TABS[ls] }),
+        t.status === 'doing' ? h('span', { className: 'chip', style: '--c:var(--waiting)', textContent: '● en curso' }) : '',
+        queued ? h('span', { className: 'chip', style: '--c:var(--dim)', textContent: '⏳ pendiente' }) : '')),
+    done ? '' : Object.assign(h('select', { className: 'mv', disabled: queued, ariaLabel: 'Mover a', onchange: e => run(b => b.edit(t.id, { list: e.target.value })) },
+      ...LISTS.map(l => h('option', { value: l, textContent: TABS[l] }))), { value: t.list }));
+}
+
+function openDlg() {
+  $('#addproj').replaceChildren(...S.projects.map(p => h('option', { value: p, textContent: p })));
+  const want = proj || store('addproj');
+  $('#addproj').value = S.projects.includes(want) ? want : 'PRYs';
+  $('#dlg').showModal();
+  $('#text').focus();
+}
+
+$('#donebtn').onclick = () => { tab = 'done'; render(); };
+$('#refresh').onclick = () => run(b => b.refresh());
+$('#new').onclick = openDlg;
+$('#cancel').onclick = () => $('#dlg').close();
+$('#dlg').onclick = e => { if (e.target === e.currentTarget) e.currentTarget.close(); };
+$('#add').onsubmit = async e => {
+  e.preventDefault();
+  store('addproj', $('#addproj').value);
+  if (await run(b => b.add($('#addproj').value, $('#text').value))) {
+    $('#text').value = '';
+    $('#dlg').close();
+    tab = 'inbox';
+    render();
+  }
+};
+run(b => b.refresh());
+</script>
+</body>
+</html>
